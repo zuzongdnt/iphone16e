@@ -1,0 +1,246 @@
+﻿<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iPhone 17e - Tuyệt tác Storytelling</title>
+    <style>
+        :root {
+            --bg-color: #000;
+            --text-color: #fff;
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow-x: hidden;
+        }
+
+        /* Container cho Canvas - Luôn dính chặt vào màn hình */
+        .canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            z-index: 1;
+        }
+
+        canvas {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            /* Đảm bảo hình ảnh phủ kín hoặc vừa vặn màn hình */
+            max-width: 100vw;
+            max-height: 100vh;
+            object-fit: contain; /* Giữ nguyên tỷ lệ ảnh, không bị méo */
+        }
+
+        /* Tạo độ dài cho trang để cuộn */
+        .scroll-height {
+            height: 600vh;
+            position: relative;
+            z-index: 2;
+        }
+
+        /* Container chứa các khối nội dung chạy theo bước cuộn */
+        .content-step {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+            pointer-events: none; /* Để không che mất sự kiện cuộn */
+        }
+
+        .content-step.active {
+            opacity: 1;
+        }
+
+        /* --- THÊM BOX BLUR (GLASSMORPHISM) CHO NỘI DUNG Ở ĐÂY --- */
+        .glass-box {
+            background: rgba(0, 0, 0, 0.4); /* Nền đen mờ 40% để làm nổi chữ trắng */
+            backdrop-filter: blur(12px); /* Hiệu ứng làm mờ phía sau box */
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.15); /* Viền xám mỏng */
+            border-radius: 20px; /* Bo góc hộp */
+            padding: 40px;
+            max-width: 80%; /* Không để hộp quá to */
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); /* Tạo bóng để tách biệt khỏi ảnh */
+            
+            /* Cần bật lại pointer-events cho box này nếu bên trong có nút bấm */
+            pointer-events: auto; 
+        }
+
+        h1 { font-size: 4rem; margin: 0 0 10px 0; font-weight: 600; letter-spacing: -2px; }
+        p { font-size: 1.5rem; color: #d2d2d7; max-width: 600px; margin: 0; }
+
+        .btn-preorder {
+            padding: 15px 35px;
+            border-radius: 30px;
+            border: none;
+            background: white;
+            color: black;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 25px;
+            transition: transform 0.2s, background 0.2s;
+        }
+
+        .btn-preorder:hover {
+            background: #f5f5f7;
+            transform: scale(1.05);
+        }
+
+        .loading-screen {
+            position: fixed;
+            z-index: 999;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="loading-screen" id="loading">
+        <h2 style="color: white;">Đang tải iPhone 17e...</h2>
+        <div id="progress" style="color: #86868b;">0%</div>
+    </div>
+
+    <div class="canvas-container">
+        <canvas id="iphone-canvas"></canvas>
+    </div>
+
+    <div class="scroll-height">
+        <div class="content-step" style="opacity: 1;">
+            <div class="glass-box">
+                <h1>iPhone 17e</h1>
+                <p>Mỏng nhẹ đến không tưởng. Đầy quyền năng.</p>
+            </div>
+        </div>
+        
+        <div class="content-step" id="step-2">
+            <div class="glass-box">
+                <h1>Thiết kế siêu mỏng</h1>
+                <p>Định nghĩa lại giới hạn của sự tinh tế.</p>
+            </div>
+        </div>
+        
+        <div class="content-step" id="step-3">
+            <div class="glass-box">
+                <h1>Màn hình rực rỡ</h1>
+                <p>Công nghệ hiển thị tương lai trong tầm tay bạn.</p>
+            </div>
+        </div>
+        
+        <div class="content-step">
+            <div class="glass-box">
+                <h1>Sẵn sàng cho kỷ nguyên mới.</h1>
+                <button class="btn-preorder">Đặt trước ngay</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+    const canvas = document.getElementById("iphone-canvas");
+    const context = canvas.getContext("2d");
+    const loadingScreen = document.getElementById("loading");
+    const progressText = document.getElementById("progress");
+
+    // Cấu hình
+    const frameCount = 96; 
+    
+    const currentFrame = index => (
+        `/images/snaptik.vn_7612675555854388487_${index.toString().padStart(3, '0')}.jpg`
+    );
+
+    const images = [];
+    const iphone = { frame: 0 };
+
+    let loadedCount = 0;
+
+    // Hàm kiểm tra tiến độ tải
+    function checkLoadingProgress() {
+        progressText.innerText = `${Math.round((loadedCount / frameCount) * 100)}%`;
+        if (loadedCount === frameCount) {
+            loadingScreen.style.display = 'none';
+            render(); 
+        }
+    }
+
+    for (let i = 0; i < frameCount; i++) {
+        const img = new Image();
+        img.src = currentFrame(i);
+        
+        img.onload = () => {
+            loadedCount++;
+            checkLoadingProgress();
+        };
+
+        img.onerror = () => {
+            console.error(`Không tìm thấy ảnh số ${i}: ${img.src}`);
+            loadedCount++; 
+            checkLoadingProgress();
+        };
+
+        images.push(img);
+    }
+
+    // Thiết lập kích thước Canvas
+    canvas.width = 1920;  
+    canvas.height = 1080;
+
+    function render() {
+        if (images[iphone.frame] && images[iphone.frame].complete) {
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            // Căn giữa ảnh trên canvas để nhìn mượt hơn khi thu phóng
+            const img = images[iphone.frame];
+            const hRatio = canvas.width / img.width;
+            const vRatio = canvas.height / img.height;
+            const ratio  = Math.min(hRatio, vRatio);
+            const centerShift_x = (canvas.width - img.width*ratio) / 2;
+            const centerShift_y = (canvas.height - img.height*ratio) / 2;  
+            context.drawImage(img, 0,0, img.width, img.height, centerShift_x, centerShift_y, img.width*ratio, img.height*ratio);  
+        }
+    }
+
+    // Lắng nghe sự kiện cuộn
+    window.addEventListener("scroll", () => {
+        const scrollTop = window.pageYOffset;
+        const maxScrollTop = document.documentElement.scrollHeight - window.innerHeight;
+        const scrollFraction = scrollTop / maxScrollTop;
+
+        const frameIndex = Math.min(
+            frameCount - 1,
+            Math.ceil(scrollFraction * frameCount)
+        );
+
+        iphone.frame = frameIndex;
+        requestAnimationFrame(render);
+
+        // Xử lý hiện/ẩn chữ
+        const steps = document.querySelectorAll('.content-step');
+        const stepIndex = Math.floor(scrollFraction * steps.length);
+        
+        steps.forEach((step, i) => {
+            if(i === stepIndex) {
+                step.classList.add('active');
+            } else {
+                step.classList.remove('active');
+            }
+        });
+    });
+</script>
+</body>
+</html>
